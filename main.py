@@ -298,15 +298,21 @@ async def api_tailor_resume(
     logging.info(f"JD URL: {jd_url}")
     logging.info(f"Uploaded File: {resume.filename}")
 
-    if not resume.filename.endswith('.pdf'):
-        logging.warning("User uploaded a non-PDF file.")
-        raise HTTPException(status_code=400, detail="Only PDF files are supported.")
+    # NEW: Safely get filename and validate it supports PDF or TXT
+    filename = resume.filename.lower()
+    if not (filename.endswith('.pdf') or filename.endswith('.txt')):
+        logging.warning(f"User uploaded an unsupported file type: {resume.filename}")
+        raise HTTPException(status_code=400, detail="Only PDF and TXT files are supported.")
 
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    temp_pdf_path = f"temp_resume_{timestamp}.pdf"
+    
+    # NEW: Determine correct extension for temp file
+    extension = ".txt" if filename.endswith('.txt') else ".pdf"
+    temp_file_path = f"temp_resume_{timestamp}{extension}"
     output_docx_path = f"Tailored_Resume_{timestamp}.docx"
 
-    with open(temp_pdf_path, "wb") as buffer:
+    # Save the uploaded file
+    with open(temp_file_path, "wb") as buffer:
         shutil.copyfileobj(resume.file, buffer)
 
     try:
@@ -335,9 +341,16 @@ Developer University || 2020 - 2024
 Bachelor of Technology in Computer Science"""
 
         else:
-            resume_text = extract_text_from_pdf(temp_pdf_path)
+            # NEW: Route text extraction based on file type
+            if filename.endswith('.pdf'):
+                resume_text = extract_text_from_pdf(temp_file_path)
+            else:
+                # Direct read for manual entry text file
+                with open(temp_file_path, 'r', encoding='utf-8') as f:
+                    resume_text = f.read()
+
             if not resume_text:
-                raise Exception("Failed to extract text from PDF.")
+                raise Exception(f"Failed to extract text from {extension.upper()} file.")
 
             jd_text = await fetch_jd_from_url(jd_url)
             if not jd_text:
@@ -352,10 +365,12 @@ Bachelor of Technology in Computer Science"""
 
     except Exception as e:
         logging.error(f"Endpoint Exception Caught: {e}")
-        cleanup_files(temp_pdf_path)
+        cleanup_files(temp_file_path)
         raise HTTPException(status_code=500, detail=str(e))
 
-    cleanup_files(temp_pdf_path)
+    # Clean up the initial upload file
+    cleanup_files(temp_file_path)
+    # Schedule the DOCX to be deleted after it is sent to the user
     background_tasks.add_task(cleanup_files, output_docx_path)
 
     logging.info(f"--- REQUEST COMPLETED. RETURNING DOCX ---")

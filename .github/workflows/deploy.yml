@@ -1,13 +1,17 @@
 name: Manual Build, Tag and Deploy
 
 on:
-  # This replaces 'on: push'. The action will no longer run automatically.
+  # This ensures the action ONLY runs when you click 'Run workflow'
   workflow_dispatch:
     inputs:
       version:
         description: 'Release Version (e.g., 0.0.1)'
         required: true
         default: '0.0.1'
+
+# CRITICAL: This allows the bot to push tags back to your repository
+permissions:
+  contents: write
 
 jobs:
   build-and-deploy:
@@ -17,14 +21,15 @@ jobs:
         with:
           fetch-depth: 0
 
-      # 1. Build Validation (Docker)
+      # 1. BUILD VALIDATION: Ensures the code actually works
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Build Check
+      - name: Build Check (Dry Run)
         run: docker build . -t backend-verify:latest
+        # If the Dockerfile has an error, the process stops here
 
-      # 2. Manual Tagging
+      # 2. TAGGING: Creates a permanent version marker
       - name: Create and Push Git Tag
         run: |
           git config user.name "github-actions"
@@ -34,7 +39,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      # 3. Deploy Trigger
+      # 3. DEPLOY: Triggers Render to pull the newly tagged code
       - name: Trigger Render Deploy
         run: |
           curl -X POST ${{ secrets.RENDER_DEPLOY_HOOK }}

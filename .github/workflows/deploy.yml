@@ -1,0 +1,37 @@
+name: Build, Tag and Deploy
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  build-and-tag:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # In a real SDE role, you'd run tests here
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      # Automated Tagging Logic
+      - name: Create Git Tag
+        id: tag_version
+        run: |
+          # Grabs version from a file or manual set
+          VERSION="v0.0.1" 
+          git tag $VERSION
+          git push origin $VERSION
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # Trigger Render Deploy
+      - name: Deploy to Render
+        run: curl -X POST ${{ secrets.RENDER_DEPLOY_HOOK }}
